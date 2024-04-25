@@ -115,6 +115,9 @@ class OpenProjectAerialRobotics:
         margin = 20                     # Pixels to ignore in borders of image
         land_at_STOP = 8600             # Area of STOP contour to land drone 
 
+
+
+
         ## Doing image analisys ##
 
         # Convert ROS image message to OpenCV image
@@ -141,40 +144,13 @@ class OpenProjectAerialRobotics:
         upper_STOP = np.array([33, 61, 75]) #W([176, 173, 135]) R([74, 254, 255])
         mask_STOP = cv2.inRange(imageRGB, lower_STOP, upper_STOP)
 
-        # lower_STOP = np.array([0, 5, 46])
-        # upper_STOP = np.array([33, 61, 75])
-
-        # Define range of green color in HSV
-        # lower_green = np.array([40, 40, 40])
-        # upper_green = np.array([80, 255, 255])
-
-        # # Define range of red color in HSV
-        # lower_red = np.array([0, 40, 40])
-        # upper_red = np.array([40, 255, 255])
-
-        # # Define range of orange color in HSV
-        # lower_orange = np.array([11, 100, 100])
-        # upper_orange = np.array([25, 255, 255])
 
         # Threshold the HSV image to get only selected colors
         mask = cv2.inRange(hsv, lower_all, upper_all)
-        #red_mask = cv2.inRange(hsv, lower_green, upper_green)
-        #red_mask = cv2.inRange(hsv, lower_red, upper_red)
-        #orange_mask = cv2.inRange(hsv, lower_orange, upper_orange)
-
-        # Combine masks for green, red, and orange
-        #mask = cv2.bitwise_and(cv2.bitwise_and(green_mask, red_mask), orange_mask)
-        #mask = cv2.addWeighted(orange_mask, 0.5, green_mask, 0.5, 0)
-
-        # # Load image, grayscale, median blur, sharpen image, Threshold and morph close
-        #gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         blur = cv2.medianBlur(mask, 9)
         sharpen_kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
         sharpen = cv2.filter2D(blur, -1, sharpen_kernel)
-        #thresh = cv2.threshold(sharpen, 160, 255, cv2.THRESH_BINARY_INV)[1]
-        #kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
-        #close = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=2)
-
+        
         # Erode image
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
         eroded  = cv2.erode(sharpen, kernel, iterations = 2)
@@ -195,29 +171,6 @@ class OpenProjectAerialRobotics:
         for contour_STOP in contours_STOP:
             total_STOP_area = total_STOP_area + cv2.contourArea(contour_STOP)
         print("stop area value = ", total_STOP_area)
-        # if total_STOP_area > land_at_STOP and total_STOP_area < land_at_STOP - 3000:
-        #     print("STOP is visible", total_STOP_area)
-
-        #     ################################# ATTEMPT TO LAND #############################################
-        #     cmd_publish.linear.x = 0.04  # Move forward
-        #     cmd_publish.linear.y = 0.0
-        #     cmd_publish.linear.z = 0.0
-        #     cmd_publish.angular.x = 0.0
-        #     cmd_publish.angular.y = 0.0
-        #     cmd_publish.angular.z = 0.0
-        #     self.publisher_.publish(cmd_publish)
-        #     print("Landing...")
-        #     time.sleep(1.57)
-        #     self.cli = self.node.create_client(TelloAction, '/drone1/tello_action') # Create client
-        #     self.publisher_ = self.node.create_publisher(Twist, '/drone1/cmd_vel', 10) # Create publisher for sending Twist messages
-        #     # Wait for the service to become available
-        #     while not self.cli.wait_for_service(timeout_sec=1.0):
-        #         self.get_logger().info('Service not available yet, waiting...')  
-        #     self.req = TelloAction.Request() # Create request message for takeoff command
-        #     self.req.cmd = 'land'  # Set the command to 'LAND'
-        #     self.future = self.cli.call_async(self.req)
-        #     print("Landed.")
-        #     time.sleep(100)
         
         # Find contours of green objects
         contours, _ = cv2.findContours(eroded, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) #cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -250,56 +203,25 @@ class OpenProjectAerialRobotics:
 
             if area > 50: #500 and area < 6000:
 
-                # # Calculate the perimeter of the contour
-                # perimeter = cv2.arcLength(contour, True)
-                
-                # # Approximate the contour to a polygon
-                # epsilon = 0.05 * perimeter
-                # approx = cv2.approxPolyDP(contour, epsilon, True)
+                # Keep track of largest shape (area-wise)
+                if area > max_area:
+                    max_area = area
+                    # (largest_x, largest_y), radius = cv2.minEnclosingCircle(contour)
+                    # largest_contour = contour
 
-                # # Get number of vertices of such polygon
-                # num_vertices = len(approx)
+                # Fit a circle to each shape and a circle to its center
+                (x, y), radius = cv2.minEnclosingCircle(contour)
+                center = (int(x), int(y))
+                radius = int(radius)
+                cv2.circle(imageRGB, center, radius, (0, 255, 0), 2)  # Circle in centroid
+                cv2.circle(imageRGB, center, 10, (0, 255, 0), -1)  # Circle in center  
 
-                # # Continue only if polygon has 4 vertices "Square" or a lot of them "Circle" 
-                # # Note: PENDING TO CALIBRATE CIRCLE BY num_vertices
-                if True: #num_vertices > 3 or num_vertices > 100:
-
-                    # Set a threshold for the aspect ratio to filter out rectangles
-
-                    # (x, y, w, h) = cv2.boundingRect(approx)
-                    # aspect_ratio = w / float(h)
-                    
-                    if True: #aspect_ratio >= 0.7 and aspect_ratio <= 1.3:
-
-                        # Keep track of largest shape (area-wise)
-                        if area > max_area:
-                            max_area = area
-                            # (largest_x, largest_y), radius = cv2.minEnclosingCircle(contour)
-                            # largest_contour = contour
-
-                        # Fit a circle to each shape and a circle to its center
-                        (x, y), radius = cv2.minEnclosingCircle(contour)
-                        center = (int(x), int(y))
-                        radius = int(radius)
-                        cv2.circle(imageRGB, center, radius, (0, 255, 0), 2)  # Circle in centroid
-                        cv2.circle(imageRGB, center, 10, (0, 255, 0), -1)  # Circle in center  
-
-                        # Keep track of largest shape (radious-wise) and inside the margins
-                        if radius > max_radius and margin < int(x) < image.shape[1] - margin and margin < int(y) < image.shape[0] - margin : 
-                            max_radius = radius
-                            largest_x = int(x)
-                            largest_y = int(y)
-                            largest_contour = contour
-
-        # if  cmd_publish.linear.x == 0.0 and cmd_publish.linear.y == 0.0 and cmd_publish.linear.z == 0.0 and cmd_publish.angular.x == 0.0 and cmd_publish.angular.y == 0.0 and cmd_publish.angular.z == 0.0:
-            
-        #     print("Not moving. Readjusting...")
-        #     cmd_publish.linear.x = -0.1
-        #     cmd_publish.linear.y = 0.0
-        #     cmd_publish.linear.z = 0.0
-        #     cmd_publish.angular.x = 0.0
-        #     cmd_publish.angular.y = 0.0
-        #     cmd_publish.angular.z = 0.0
+                # Keep track of largest shape (radious-wise) and inside the margins
+                if radius > max_radius and margin < int(x) < image.shape[1] - margin and margin < int(y) < image.shape[0] - margin : 
+                    max_radius = radius
+                    largest_x = int(x)
+                    largest_y = int(y)
+                    largest_contour = contour
 
         ## Attempt to follow largest shape if it exists
 
@@ -316,7 +238,7 @@ class OpenProjectAerialRobotics:
    
         else:
             
-            # Is the border too close?
+            ## Is the border too close?
 
             # Compute the bounding rectangle of the largest contour and its center
             x, y, w, h = cv2.boundingRect(largest_contour)
@@ -396,7 +318,7 @@ class OpenProjectAerialRobotics:
                         cmd_publish.angular.z = 0.0
                         self.publisher_.publish(cmd_publish)
                     else:
-                        if max_area > 80000:
+                        if max_area > 70000:
                             print("##################### COLLISION AVOIDANCE ######################",max_area)
                             cmd_publish.linear.x = -0.01 # Move backwards
                             cmd_publish.linear.y = 0.0
@@ -467,30 +389,6 @@ class OpenProjectAerialRobotics:
 
         # Add a little pause for me to see what is happening
         #time.sleep(0.01)
-
-    # def stop_drone(self, area, threshold=0.1):
-    #     # Calculate the error between the area of the gate and the threshold
-    #     error = np.abs(0.4 - area) 
-    #     print(f"Error: {error}")
-    #     # Calculate the steps to move
-    #     steps = error * self.speedx
-    #     # Check if the drone is close enough to the gate
-    #     if area < threshold:
-    #         self.move_x(steps)
-    #         self.moving = True
-    #         self.close_enough = False
-    #         self.centered = False
-    #     else:
-    #         self.close_enough = True
-    #         self.moving = False
-    #         self.stop()
-    #         if self.sim:
-    #             self.send_request_simulator('land')
-    #         else:
-    #             self.land()
-    #         exit()
-    #     return
-
 
 def main(args=None):
     rclpy.init(args=args)

@@ -1,12 +1,13 @@
-# Aerial Robotics UTU 2024: Our Common Project
+# Aerial Robotics UTU 2024: Group 5 - Common Project
  
 ## Description:
 This code is meant to take off a trello drone, then move trough 
-green check points using images from a on-board camera in a 
+different check points using images from a on-board camera in a 
 gazebo simulation, using ROS2 and OpenCV.
 
-## Installation:
 Based on: https://github.com/TIERS/drone_racing_ros2/tree/main
+
+## Installation:
 Run this on your console once: (or VisualStudio Code terminal, if you rather)
 
     mkdir -p ~/drone_racing_ros2_ws/src
@@ -17,7 +18,7 @@ Run this on your console once: (or VisualStudio Code terminal, if you rather)
     colcon build
 
 ## Usage
-Run this every time you want to run the gazeboenvironment
+Run this every time you want to run the gazebo environment
 
     cd ~/drone_racing_ros2_ws
     source install/setup.bash
@@ -44,10 +45,11 @@ And then add:
 Enjoy!
  
 ## Authors: 
+
+     - Prashan Herath [prashan.r.herathmudiyanselage@utu.fi]
      - Julian C. Paez P. [julian.c.paezpineros@utu.fi]
      - Michalis Iona [michalis.l.iona@utu.fi]
-     - Prashan Herath [prashan.r.herathmudiyanselage@utu.fi]
- 
+
 For: University of Turku - TIERS 
 Course: Aerial Robotics and Multi-Robot Systems 
 Date: March 26th, 2024 
