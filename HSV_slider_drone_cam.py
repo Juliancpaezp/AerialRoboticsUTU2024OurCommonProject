@@ -39,10 +39,12 @@ class HSVAdjustmentNode(Node):
 
     def image_callback(self, msg):
         # Convert ROS image message to OpenCV image
-        image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+        image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8")
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
 
         # Display the live image with sliders for adjusting HSV values
-        self.adjust_hsv(image)
+        self.adjust_hsv(hsv)
 
     def nothing(self, x):
         pass
