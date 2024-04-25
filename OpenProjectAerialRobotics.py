@@ -60,7 +60,7 @@ Course: Aerial Robotics and Multi-Robot Systems
 Date: March 26th, 2024 
 
 ## Pending
--
+- La condicion de avanzar puede ser solo si el centro del area mas grande no esta cerca de los magenes, en lugar de ignorar el contorno, asi se mantiene activada la colision avoidances
 
 """
 
@@ -108,14 +108,19 @@ class OpenProjectAerialRobotics:
 
     def image_callback(self, msg):
 
+        ## User-modifiable variables
+        new_width = 450                 # Height of incoming camera image
+        new_height = 300                # Height of incoming camera image
+        allowed_centering_error = 17    # Maximum error while centering drone on gate
+        margin = 20                     # Pixels to ignore in borders of image
+        land_at_STOP = 8600             # Area of STOP contour to land drone 
+
         ## Doing image analisys ##
 
         # Convert ROS image message to OpenCV image
         image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8")
 
         # Resize the image
-        new_width = 450
-        new_height = 300
         image = cv2.resize(image, (new_width, new_height))
 
         # Convert color from BGR to RGB for better visualization
@@ -183,8 +188,7 @@ class OpenProjectAerialRobotics:
         # Create publish message 
         cmd_publish = Twist()
 
-        ############ STOP AND LAND #####################
-        land_at_STOP = 8600
+        ############ Find STOP signal #####################
         # Find contours of mask_STOP, detect total area and show it in console 
         total_STOP_area = -1
         contours_STOP, _ = cv2.findContours(mask_STOP, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) #cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -238,9 +242,6 @@ class OpenProjectAerialRobotics:
         max_area = -1
         max_radius = -1
         
-        # Initialize movement variables
-        allowed_centering_error = 17 # To avoid hovering too much arround the center    
-
         # Analize area of every contour
         for contour in contours:
 
@@ -283,8 +284,8 @@ class OpenProjectAerialRobotics:
                         cv2.circle(imageRGB, center, radius, (0, 255, 0), 2)  # Circle in centroid
                         cv2.circle(imageRGB, center, 10, (0, 255, 0), -1)  # Circle in center  
 
-                        # Keep track of largest shape (radious-wise)
-                        if radius > max_radius:
+                        # Keep track of largest shape (radious-wise) and inside the margins
+                        if radius > max_radius and margin < int(x) < image.shape[1] - margin and margin < int(y) < image.shape[0] - margin : 
                             max_radius = radius
                             largest_x = int(x)
                             largest_y = int(y)
@@ -321,8 +322,6 @@ class OpenProjectAerialRobotics:
             x, y, w, h = cv2.boundingRect(largest_contour)
             center_x = x + w / 2
             center_y = y + h / 2
-
-            margin = 20
 
             # Check if the center is close to any of the borders within [Margin] pixels
             if (center_x <= margin or center_x >= width - margin or center_y <= margin or center_y >= height - margin):
@@ -399,14 +398,14 @@ class OpenProjectAerialRobotics:
                     else:
                         if max_area > 80000:
                             print("##################### COLLISION AVOIDANCE ######################",max_area)
-                            cmd_publish.linear.x = -0.02 # Move backwards
+                            cmd_publish.linear.x = -0.01 # Move backwards
                             cmd_publish.linear.y = 0.0
                             cmd_publish.linear.z = 0.0
                             cmd_publish.angular.x = 0.0
                             cmd_publish.angular.y = 0.0
                             cmd_publish.angular.z = 0.0
                             self.publisher_.publish(cmd_publish)
-                            time.sleep(0.1)
+                            time.sleep(0.05)
                         else:
                             if total_STOP_area > land_at_STOP:
                                 print("STOP is visible", total_STOP_area)
@@ -430,9 +429,11 @@ class OpenProjectAerialRobotics:
                                 self.req.cmd = 'land'  # Set the command to 'LAND'
                                 self.future = self.cli.call_async(self.req)
                                 print("Landed.")
-                                time.sleep(100)
+                                rclpy.shutdown()
+                                #time.sleep(100)
 
                             print("Drone is centered. Moving forward... :)",max_area)
+                            time.sleep(0.05)
                             cmd_publish.linear.x = 0.6  # Move forward
                             cmd_publish.linear.y = 0.0
                             cmd_publish.linear.z = 0.0   # Stop leveling
@@ -465,7 +466,7 @@ class OpenProjectAerialRobotics:
         cv2.waitKey(1)
 
         # Add a little pause for me to see what is happening
-        time.sleep(0.01)
+        #time.sleep(0.01)
 
     # def stop_drone(self, area, threshold=0.1):
     #     # Calculate the error between the area of the gate and the threshold
