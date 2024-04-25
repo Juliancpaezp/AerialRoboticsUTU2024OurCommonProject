@@ -20,11 +20,11 @@ Run this on your console once: (or VisualStudio Code terminal, if you rather)
 ## Usage
 Run this every time you want to run the gazeboenvironment
 
-    cd ~/drone_racing_ros2_ws
-    source install/setup.bash
-    export GAZEBO_MODEL_PATH=${PWD}/install/tello_gazebo/share/tello_gazebo/models
-    source /usr/share/gazebo/setup.sh
-    ros2 launch tello_gazebo simple_launch.py
+cd ~/drone_racing_ros2_ws
+source install/setup.bash
+export GAZEBO_MODEL_PATH=${PWD}/install/tello_gazebo/share/tello_gazebo/models
+source /usr/share/gazebo/setup.sh
+ros2 launch tello_gazebo simple_launch.py
 
 Then, run "OpenProjectAerialRobotics.py" with python from console
 
@@ -131,6 +131,14 @@ class OpenProjectAerialRobotics:
         lower_all = np.array([0, 185, 0]) #([0, 69, 0])
         upper_all = np.array([179, 255, 100])
 
+        # Define range for STOP sign and create mask for it
+        lower_STOP = np.array([0, 5, 46]) #W([63, 139, 0]) R([72, 193, 163])
+        upper_STOP = np.array([33, 61, 75]) #W([176, 173, 135]) R([74, 254, 255])
+        mask_STOP = cv2.inRange(imageRGB, lower_STOP, upper_STOP)
+
+        # lower_STOP = np.array([0, 5, 46])
+        # upper_STOP = np.array([33, 61, 75])
+
         # Define range of green color in HSV
         # lower_green = np.array([40, 40, 40])
         # upper_green = np.array([80, 255, 255])
@@ -164,7 +172,7 @@ class OpenProjectAerialRobotics:
 
         # Erode image
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-        eroded  = cv2.erode(sharpen, kernel, iterations=3)
+        eroded  = cv2.erode(sharpen, kernel, iterations = 2)
 
         # Dilate image (Desuse)
         #dilated = cv2.dilate(eroded, kernel, iterations=2)
@@ -172,6 +180,41 @@ class OpenProjectAerialRobotics:
         # # Perform Canny edge detection (Desuse)
         # edges = cv2.Canny(mask, 50, 150)
 
+        # Create publish message 
+        cmd_publish = Twist()
+
+        ############ STOP AND LAND #####################
+        land_at_STOP = 8600
+        # Find contours of mask_STOP, detect total area and show it in console 
+        total_STOP_area = -1
+        contours_STOP, _ = cv2.findContours(mask_STOP, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) #cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for contour_STOP in contours_STOP:
+            total_STOP_area = total_STOP_area + cv2.contourArea(contour_STOP)
+        print("stop area value = ", total_STOP_area)
+        # if total_STOP_area > land_at_STOP and total_STOP_area < land_at_STOP - 3000:
+        #     print("STOP is visible", total_STOP_area)
+
+        #     ################################# ATTEMPT TO LAND #############################################
+        #     cmd_publish.linear.x = 0.04  # Move forward
+        #     cmd_publish.linear.y = 0.0
+        #     cmd_publish.linear.z = 0.0
+        #     cmd_publish.angular.x = 0.0
+        #     cmd_publish.angular.y = 0.0
+        #     cmd_publish.angular.z = 0.0
+        #     self.publisher_.publish(cmd_publish)
+        #     print("Landing...")
+        #     time.sleep(1.57)
+        #     self.cli = self.node.create_client(TelloAction, '/drone1/tello_action') # Create client
+        #     self.publisher_ = self.node.create_publisher(Twist, '/drone1/cmd_vel', 10) # Create publisher for sending Twist messages
+        #     # Wait for the service to become available
+        #     while not self.cli.wait_for_service(timeout_sec=1.0):
+        #         self.get_logger().info('Service not available yet, waiting...')  
+        #     self.req = TelloAction.Request() # Create request message for takeoff command
+        #     self.req.cmd = 'land'  # Set the command to 'LAND'
+        #     self.future = self.cli.call_async(self.req)
+        #     print("Landed.")
+        #     time.sleep(100)
+        
         # Find contours of green objects
         contours, _ = cv2.findContours(eroded, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) #cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -196,8 +239,7 @@ class OpenProjectAerialRobotics:
         max_radius = -1
         
         # Initialize movement variables
-        allowed_centering_error = 10 # To avoid hovering too much arround the center
-        cmd_publish = Twist()        
+        allowed_centering_error = 17 # To avoid hovering too much arround the center    
 
         # Analize area of every contour
         for contour in contours:
@@ -263,6 +305,13 @@ class OpenProjectAerialRobotics:
         if largest_x == None or largest_y == None:# or max_area > 80000:
 
             print("No shape found :c", max_area)
+            cmd_publish.linear.x = -0.15 # Move backwards
+            cmd_publish.linear.y = 0.0
+            cmd_publish.linear.z = 0.0
+            cmd_publish.angular.x = 0.0
+            cmd_publish.angular.y = 0.0
+            cmd_publish.angular.z = 0.2
+            self.publisher_.publish(cmd_publish)
    
         else:
             
@@ -300,9 +349,12 @@ class OpenProjectAerialRobotics:
                 # Follow biggest contour horizontally
                 center_x_image = image.shape[1] // 2
                 center_y_image = image.shape[0] // 2
+                # Draw a rectangle in the target area and outside the allowed area
+                cv2.rectangle(imageRGB, (center_x_image - allowed_centering_error, center_y_image - allowed_centering_error), (center_x_image + allowed_centering_error, center_y_image + allowed_centering_error), (255, 0, 255), 2)
+                cv2.rectangle(imageRGB, (margin, margin), (image.shape[1] - margin, image.shape[0] - margin), (126, 0, 255), 2)
                 if largest_x > center_x_image + allowed_centering_error:
                     print("Turning right...",max_area)
-                    cmd_publish.linear.x = -0.002
+                    cmd_publish.linear.x = 0.0
                     cmd_publish.linear.y = 0.0
                     cmd_publish.linear.z = 0.0
                     cmd_publish.angular.x = 0.0
@@ -312,7 +364,7 @@ class OpenProjectAerialRobotics:
                     
                 elif largest_x < center_x_image - allowed_centering_error:
                     print("Turning left...",max_area)
-                    cmd_publish.linear.x = -0.002
+                    cmd_publish.linear.x = 0.0
                     cmd_publish.linear.y = 0.0
                     cmd_publish.linear.z = 0.0
                     cmd_publish.angular.x = 0.0
@@ -347,7 +399,7 @@ class OpenProjectAerialRobotics:
                     else:
                         if max_area > 80000:
                             print("##################### COLLISION AVOIDANCE ######################",max_area)
-                            cmd_publish.linear.x = -0.3 # Move backwards
+                            cmd_publish.linear.x = -0.02 # Move backwards
                             cmd_publish.linear.y = 0.0
                             cmd_publish.linear.z = 0.0
                             cmd_publish.angular.x = 0.0
@@ -356,8 +408,32 @@ class OpenProjectAerialRobotics:
                             self.publisher_.publish(cmd_publish)
                             time.sleep(0.1)
                         else:
+                            if total_STOP_area > land_at_STOP:
+                                print("STOP is visible", total_STOP_area)
+
+                                ################################# ATTEMPT TO LAND #############################################
+                                cmd_publish.linear.x = 0.035  # Move forward
+                                cmd_publish.linear.y = 0.0
+                                cmd_publish.linear.z = 0.0
+                                cmd_publish.angular.x = 0.0
+                                cmd_publish.angular.y = 0.0
+                                cmd_publish.angular.z = 0.0
+                                self.publisher_.publish(cmd_publish)
+                                print("Landing...")
+                                time.sleep(2.4)
+                                self.cli = self.node.create_client(TelloAction, '/drone1/tello_action') # Create client
+                                self.publisher_ = self.node.create_publisher(Twist, '/drone1/cmd_vel', 10) # Create publisher for sending Twist messages
+                                # Wait for the service to become available
+                                while not self.cli.wait_for_service(timeout_sec=1.0):
+                                    self.get_logger().info('Service not available yet, waiting...')  
+                                self.req = TelloAction.Request() # Create request message for takeoff command
+                                self.req.cmd = 'land'  # Set the command to 'LAND'
+                                self.future = self.cli.call_async(self.req)
+                                print("Landed.")
+                                time.sleep(100)
+
                             print("Drone is centered. Moving forward... :)",max_area)
-                            cmd_publish.linear.x = 0.7  # Move forward
+                            cmd_publish.linear.x = 0.6  # Move forward
                             cmd_publish.linear.y = 0.0
                             cmd_publish.linear.z = 0.0   # Stop leveling
                             cmd_publish.angular.x = 0.0
@@ -368,20 +444,7 @@ class OpenProjectAerialRobotics:
         # # Publish movement commands
         # self.publisher_.publish(cmd_publish)
 
-        # Display the images
-        # cv2.imshow('image', image)
-        # cv2.imshow('mask', mask)
-        # cv2.imshow('hsv', hsv)
-        # cv2.imshow('eroded', eroded)
-        # cv2.imshow('dilated', dilated)
-        # cv2.imshow('contour', contour)
-
-        # cv2.moveWindow('image', 0, 0)
-        # cv2.moveWindow('mask', 525, 0)
-        # cv2.moveWindow('hsv', 980, 0)
-        # cv2.moveWindow('eroded', 0, 420)
-        # cv2.moveWindow('dilated', 525, 420) 
-        # cv2.moveWindow('contour', 980, 420)
+        ## Display the images
 
         cv2.imshow('imageRGB', imageRGB)
         cv2.imshow('mask', mask)
@@ -389,6 +452,7 @@ class OpenProjectAerialRobotics:
         cv2.imshow('sharpen', sharpen)
         cv2.imshow('eroded', eroded)
         cv2.imshow('contour_image', contour_image)
+        cv2.imshow('mask_STOP', mask_STOP)
 
         cv2.moveWindow('imageRGB', 0, 0)
         cv2.moveWindow('mask', 525, 0)
@@ -396,7 +460,8 @@ class OpenProjectAerialRobotics:
         cv2.moveWindow('sharpen', 0, 420)
         cv2.moveWindow('eroded', 525, 420) 
         cv2.moveWindow('contour_image', 980, 420)
-        
+        cv2.moveWindow('mask_STOP', 1400, 0)
+
         cv2.waitKey(1)
 
         # Add a little pause for me to see what is happening
